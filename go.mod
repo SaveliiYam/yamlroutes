@@ -3,7 +3,7 @@ module github.com/SaveliiYam/yamlroutes
 go 1.25.0
 
 require (
-	github.com/SaveliiYam/ginserver v0.3.0
+	github.com/SaveliiYam/ginserver v0.4.0
 	github.com/gin-gonic/gin v1.12.0
 	gopkg.in/yaml.v3 v3.0.1
 )

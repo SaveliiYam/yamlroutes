@@ -11,7 +11,7 @@
 ## Установка
 
 ```bash
-go get github.com/SaveliiYam/yamlroutes@v0.2.0
+go get github.com/SaveliiYam/yamlroutes@v0.3.0
 ```
 
 ## Использование (gin)
@@ -48,12 +48,11 @@ err := ginroutes.MountFile(engine, reg, "routes.yaml") // или MountYAML(engin
 
 ## Чистые обработчики для gin (с v0.2.0)
 
-`ginroutes.HandlerRegistry` принимает `ginserver.HandlerFunc` (возвращает
+`ginroutes.HandlerRegistry` принимает `ginserver.HandlerFunc` (возвращает Result через утилиты ginserver, статус — внутри Result;
 `data, error`) и сам оборачивает их в конверт при монтировании:
 
 ```go
 reg := ginroutes.NewHandlerRegistry()
 reg.RegisterHandler("UsersList", handlers.List)
-reg.RegisterHandlerStatus("UserCreate", http.StatusCreated, handlers.Create)
 err := reg.MountFile(engine, "routes.yaml")
 ```

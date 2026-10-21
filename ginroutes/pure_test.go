@@ -14,12 +14,12 @@ import (
 func TestHandlerRegistryWrapsPureHandlers(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	reg := ginroutes.NewHandlerRegistry()
-	// Чистые функции: ни одного Wrap в прикладном коде.
-	reg.RegisterHandler("UsersList", func(*gin.Context) (any, error) {
-		return []string{"a"}, nil
+	// Чистые функции, возвращающие Result: ни одного Wrap в прикладном коде.
+	reg.RegisterHandler("UsersList", func(*gin.Context) ginserver.Result {
+		return ginserver.Data([]string{"a"})
 	})
-	reg.RegisterHandlerStatus("UserCreate", http.StatusCreated, func(*gin.Context) (any, error) {
-		return gin.H{"id": "1"}, nil
+	reg.RegisterHandler("UserCreate", func(*gin.Context) ginserver.Result {
+		return ginserver.Data(gin.H{"id": "1"})
 	})
 
 	e := gin.New()
@@ -39,8 +39,7 @@ routes:
 	}
 	w = httptest.NewRecorder()
 	e.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/users", nil))
-	if w.Code != 201 || w.Body.String() != `{"data":{"id":"1"}}` {
+	if w.Code != 200 || w.Body.String() != `{"data":{"id":"1"}}` {
 		t.Fatalf("create: %d %s", w.Code, w.Body)
 	}
-	var _ = ginserver.Wrap // зависимость осознанная: оборачивает именно ginserver
 }
