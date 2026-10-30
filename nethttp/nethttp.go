@@ -19,8 +19,8 @@ func NewRegistry() *Registry { return yamlroutes.NewRegistry[http.HandlerFunc]()
 
 type adapter struct{ mux *http.ServeMux }
 
-func (a adapter) Handle(method, path string, h http.HandlerFunc) {
-	a.mux.HandleFunc(method+" "+ConvertPath(path), h)
+func (a adapter) Handle(route yamlroutes.Route, h http.HandlerFunc) {
+	a.mux.HandleFunc(route.Method+" "+ConvertPath(route.Path), h)
 }
 
 // Mount вешает spec на ServeMux.

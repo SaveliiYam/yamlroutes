@@ -15,8 +15,8 @@ func NewRegistry() *Registry { return yamlroutes.NewRegistry[gin.HandlerFunc]() 
 
 type adapter struct{ r gin.IRouter }
 
-func (a adapter) Handle(method, path string, h gin.HandlerFunc) {
-	a.r.Handle(method, path, h)
+func (a adapter) Handle(route yamlroutes.Route, h gin.HandlerFunc) {
+	a.r.Handle(route.Method, route.Path, h)
 }
 
 // Mount вешает spec на gin-роутер.

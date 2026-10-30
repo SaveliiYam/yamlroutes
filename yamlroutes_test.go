@@ -65,9 +65,27 @@ func TestMissingHandlerAndValidation(t *testing.T) {
 		"routes:\n  - {method: GET, path: x, do: A}\n",
 		"routes:\n  - {method: GET, path: /x, do: A}\n  - {method: GET, path: /x, do: B}\n",
 		"routes:\n  - {method: GET, path: /x, doo: A}\n", // опечатка в ключе
+		"routes:\n  - {method: GET, path: /x, do: A, auth: [oauth]}\n",
 	} {
 		if _, err := yamlroutes.Parse([]byte(bad)); err == nil {
 			t.Fatalf("expected error for %q", bad)
 		}
+	}
+}
+
+func TestAuthField(t *testing.T) {
+	spec, err := yamlroutes.Parse([]byte(`
+routes:
+  - {method: GET, path: /open, do: Open}
+  - {method: POST, path: /secure, do: Secure, auth: [basic]}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if spec.Routes[0].HasAuth("basic") {
+		t.Fatal("open must not require basic")
+	}
+	if !spec.Routes[1].HasAuth("basic") || !spec.RequiresAuth("basic") {
+		t.Fatal("secure must require basic")
 	}
 }

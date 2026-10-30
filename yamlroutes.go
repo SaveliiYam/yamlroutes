@@ -1,22 +1,12 @@
 // Package yamlroutes — декларативные маршруты из YAML за реестром обработчиков.
 //
-// YAML знает только имена, код регистрирует реализации:
-//
 //	routes:
-//	  - method: GET
-//	    path: /api/v1/users
-//	    do: UsersList
+//	  - method: POST
+//	    path: /srv/jwt/api/v1/create
+//	    do: JwtCreate
+//	    auth: [basic]   # опционально; пока поддерживается basic
 //
-//	reg := yamlroutes.NewRegistry[gin.HandlerFunc]()
-//	reg.RegisterHandler("UsersList", handlers.List)
-//	err := reg.MountFile(router, "routes.yaml")
-//
-// Ядро пакета не зависит от фреймворка: обработчик — любой тип H,
-// роутер — любой тип с Handle(method, path, H). Готовые адаптеры:
-// ginroutes (gin) и nethttp (net/http ServeMux) в подпакетах.
-//
-// Несовпадение YAML и кода в любую сторону — ошибка при старте,
-// а не 404 в проде.
+// Ядро не зависит от фреймворка. Адаптеры: ginroutes, nethttp.
 package yamlroutes
 
 import (
@@ -29,11 +19,28 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// Известные способы авторизации на ручке (расширяется по мере появления).
+var knownAuth = map[string]struct{}{
+	"basic": {},
+}
+
 // Route — одна ручка из YAML.
 type Route struct {
-	Method string `yaml:"method"`
-	Path   string `yaml:"path"`
-	Do     string `yaml:"do"`
+	Method string   `yaml:"method"`
+	Path   string   `yaml:"path"`
+	Do     string   `yaml:"do"`
+	Auth   []string `yaml:"auth"` // опционально: basic, …
+}
+
+// HasAuth сообщает, есть ли способ name в списке auth (без учёта регистра).
+func (r Route) HasAuth(name string) bool {
+	want := strings.ToLower(strings.TrimSpace(name))
+	for _, a := range r.Auth {
+		if strings.ToLower(strings.TrimSpace(a)) == want {
+			return true
+		}
+	}
+	return false
 }
 
 // Spec — корневой документ YAML.
@@ -41,11 +48,21 @@ type Spec struct {
 	Routes []Route `yaml:"routes"`
 }
 
+// RequiresAuth — true, если хотя бы одна ручка требует указанный способ.
+func (s Spec) RequiresAuth(name string) bool {
+	for _, r := range s.Routes {
+		if r.HasAuth(name) {
+			return true
+		}
+	}
+	return false
+}
+
 // Parse разбирает YAML и валидирует структуру (без привязки к реестру).
 func Parse(data []byte) (Spec, error) {
 	var spec Spec
 	dec := yaml.NewDecoder(strings.NewReader(string(data)))
-	dec.KnownFields(true) // опечатка в ключе YAML — ошибка, а не тихий игнор
+	dec.KnownFields(true)
 	if err := dec.Decode(&spec); err != nil {
 		return Spec{}, fmt.Errorf("yamlroutes: parse: %w", err)
 	}
@@ -64,7 +81,7 @@ func LoadFile(path string) (Spec, error) {
 	return Parse(data)
 }
 
-// Validate проверяет методы, пути и дубликаты.
+// Validate проверяет методы, пути, auth и дубликаты.
 func (s Spec) Validate() error {
 	seen := make(map[string]bool, len(s.Routes))
 	for i, r := range s.Routes {
@@ -81,6 +98,15 @@ func (s Spec) Validate() error {
 		if strings.TrimSpace(r.Do) == "" {
 			return fmt.Errorf("yamlroutes: %s: do is empty", where)
 		}
+		for _, a := range r.Auth {
+			key := strings.ToLower(strings.TrimSpace(a))
+			if key == "" {
+				return fmt.Errorf("yamlroutes: %s: empty auth entry", where)
+			}
+			if _, ok := knownAuth[key]; !ok {
+				return fmt.Errorf("yamlroutes: %s: unknown auth %q (supported: basic)", where, a)
+			}
+		}
 		key := r.Method + " " + r.Path
 		if seen[key] {
 			return fmt.Errorf("yamlroutes: %s: duplicate route", where)
@@ -92,7 +118,7 @@ func (s Spec) Validate() error {
 
 // Router — то, на что вешаются маршруты (адаптеры — в подпакетах).
 type Router[H any] interface {
-	Handle(method, path string, handler H)
+	Handle(route Route, handler H)
 }
 
 // Registry — имя обработчика -> обработчик типа H.
@@ -128,7 +154,6 @@ func (r *Registry[H]) Get(name string) (H, bool) {
 }
 
 // Mount вешает все маршруты spec на router.
-// Ошибка, если в YAML есть имя без зарегистрированного обработчика.
 func (r *Registry[H]) Mount(router Router[H], spec Spec) error {
 	if err := spec.Validate(); err != nil {
 		return err
@@ -140,7 +165,7 @@ func (r *Registry[H]) Mount(router Router[H], spec Spec) error {
 			missing = append(missing, route.Do)
 			continue
 		}
-		router.Handle(route.Method, route.Path, h)
+		router.Handle(route, h)
 	}
 	if len(missing) > 0 {
 		sort.Strings(missing)
